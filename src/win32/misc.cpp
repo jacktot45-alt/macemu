@@ -222,6 +222,23 @@ void Win32::registerMisc() {
     });
     crt("snprintf", registry_["msvcrt.dll!_snprintf"]);
 
+    // __acrt_iob_func hoort bij UCRT's interne stdio-plumbing en wordt door de
+    // CRT-opstartcode aangeroepen, ook als de gast zelf geen printf/fprintf
+    // gebruikt. We geven drie neplege FILE-structs terug (index 0/1/2 =
+    // stdin/stdout/stderr) - genoeg om de CRT tevreden te stellen zonder de
+    // hele gebufferde stdio-laag te implementeren.
+    registerApi("ucrtbase.dll", "__acrt_iob_func", [](Emulator& emu, Cpu& cpu) -> uint64_t {
+        static std::unordered_map<Emulator*, uint64_t> bases;
+        uint64_t& base = bases[&emu];
+        if (!base) {
+            base = emu.allocScratch(3 * 64, 16);
+            emu.memory().fill(base, 0, 3 * 64);
+        }
+        uint32_t idx = static_cast<uint32_t>(apiArg(cpu, 0));
+        if (idx > 2) idx = 2;
+        return base + idx * 64;
+    });
+
     crt("exit", [](Emulator&, Cpu& cpu) -> uint64_t {
         cpu.exitCode = apiArg(cpu, 0) & 0xFFFFFFFF;
         cpu.halted = true;
