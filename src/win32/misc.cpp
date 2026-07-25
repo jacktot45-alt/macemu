@@ -253,7 +253,18 @@ void Win32::registerMisc() {
         cpu.halted = true;
         return 0;
     });
-    crt("atexit", [](Emulator&, Cpu&) -> uint64_t { return 0; });
+    // atexit/_crt_atexit registreren een cleanup-functie die pas bij
+    // ExitProcess echt aangeroepen wordt (zie kernel32.dll!ExitProcess).
+    crt("atexit", [](Emulator& emu, Cpu& cpu) -> uint64_t {
+        emu.win32().registerAtExit(apiArg(cpu, 0));
+        return 0;
+    });
+    crt("_crt_atexit", registry_["msvcrt.dll!atexit"]);
+    crt("_onexit", [](Emulator& emu, Cpu& cpu) -> uint64_t {
+        uint64_t fn = apiArg(cpu, 0);
+        emu.win32().registerAtExit(fn);
+        return fn; // _onexit geeft de functiepointer terug, geen statuscode
+    });
     crt("_initterm", [](Emulator&, Cpu& cpu) -> uint64_t {
         // Array van functiepointers aflopen en aanroepen (CRT-initialisatie).
         uint64_t begin = apiArg(cpu, 0), end = apiArg(cpu, 1);

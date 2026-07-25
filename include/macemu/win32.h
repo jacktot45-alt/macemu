@@ -257,6 +257,12 @@ public:
     uint64_t environmentW() const { return environmentW_; }
     uint64_t stdHandle(int which) const; // -10 = in, -11 = out, -12 = err
 
+    // atexit/_crt_atexit: functies die de gast bij ExitProcess nog aangeroepen
+    // wil hebben (CRT-cleanup, o.a. stdio-flush). Worden in omgekeerde
+    // volgorde van registratie aangeroepen, zoals de C-standaard voorschrijft.
+    void registerAtExit(uint64_t fn) { atexitCallbacks_.push_back(fn); }
+    const std::vector<uint64_t>& atexitCallbacks() const { return atexitCallbacks_; }
+
     // --- vensters ---
     std::map<std::string, WndClassInfo>& classes() { return classes_; }
     std::map<uint64_t, WindowObject>& windowMap() { return windows_; }
@@ -322,6 +328,7 @@ private:
     uint64_t cmdlineA_ = 0, cmdlineW_ = 0;
     std::string cmdlineText_;
     uint64_t environmentA_ = 0, environmentW_ = 0;
+    std::vector<uint64_t> atexitCallbacks_;
 
     std::map<uint64_t, GdiObject> gdiObjects_;
     uint64_t nextGdiHandle_ = 0x9000;

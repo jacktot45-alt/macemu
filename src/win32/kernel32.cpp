@@ -376,8 +376,13 @@ void Win32::registerKernel32() {
     });
 
     // --------------------------------------------------------------- proces
-    reg("ExitProcess", [](Emulator&, Cpu& cpu) -> uint64_t {
-        cpu.exitCode = apiArg(cpu, 0) & 0xFFFFFFFF;
+    reg("ExitProcess", [](Emulator& emu, Cpu& cpu) -> uint64_t {
+        uint32_t code = static_cast<uint32_t>(apiArg(cpu, 0));
+        // atexit-callbacks in omgekeerde volgorde van registratie, zoals de
+        // C-standaard voorschrijft. Ze draaien vóór het proces echt stopt.
+        const auto& callbacks = emu.win32().atexitCallbacks();
+        for (auto it = callbacks.rbegin(); it != callbacks.rend(); ++it) cpu.callGuest(*it, {});
+        cpu.exitCode = code;
         cpu.halted = true;
         MACEMU_LOG_INFO("ExitProcess(%llu)", (unsigned long long)cpu.exitCode);
         return 0;
