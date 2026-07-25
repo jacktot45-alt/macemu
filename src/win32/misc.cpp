@@ -282,6 +282,11 @@ void Win32::registerMisc() {
         }
         return 0;
     });
+    // Getter/setter voor de UCRT invalid-parameter-handler. Wij roepen die
+    // handler zelf nooit aan (er zijn geen invalid-parameter-checks
+    // geïmplementeerd), dus "geen vorige handler" (0) teruggeven volstaat.
+    crt("_set_invalid_parameter_handler", [](Emulator&, Cpu&) -> uint64_t { return 0; });
+    crt("_set_thread_local_invalid_parameter_handler", [](Emulator&, Cpu&) -> uint64_t { return 0; });
     crt("_controlfp", [](Emulator&, Cpu&) -> uint64_t { return 0x9001F; });
     crt("_controlfp_s", [](Emulator&, Cpu&) -> uint64_t { return 0; });
     crt("_set_app_type", [](Emulator&, Cpu&) -> uint64_t { return 0; });

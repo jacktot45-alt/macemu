@@ -424,8 +424,8 @@ void Win32::registerKernel32() {
     reg("GetEnvironmentVariableA", getEnvVar(false));
     reg("GetEnvironmentVariableW", getEnvVar(true));
 
-    auto getStartupInfo = [](bool wide) {
-        return [wide](Emulator& emu, Cpu& cpu) -> uint64_t {
+    auto getStartupInfo = [](bool /*wide*/) {
+        return [](Emulator& emu, Cpu& cpu) -> uint64_t {
             uint64_t si = apiArg(cpu, 0);
             if (!si) return 0;
             cpu.mem.fill(si, 0, 104);
