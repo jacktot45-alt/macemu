@@ -1,0 +1,8 @@
+build/
+*.o
+*.ppm
+*.png
+.DS_Store
+compile_commands.json
+.cache/
+*.EXE
