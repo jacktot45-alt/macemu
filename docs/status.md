@@ -9,7 +9,7 @@ Laatste update: bij het opzetten van Fase 0 t/m 4.
 
 ```
 ctest --output-on-failure
-  cpu ............ 83 checks   x86-64 interpreter
+  cpu ............ 94 checks   x86-64 interpreter (incl. SSE2 en x87)
   memory ......... 19 checks   pagetabel, rechten, grensgevallen
   pe ............. 35 checks   PE-parser + haalbaarheidscheck
   integration ....             hele emulator op 3 gegenereerde .exe's
@@ -47,10 +47,11 @@ daadwerkelijk in de framebuffer tekent.
 | CMOVcc, SETcc, CMPXCHG(16B), XADD, BSWAP | werkt |
 | CPUID, RDTSC, XGETBV | werkt |
 | SSE/SSE2-subset (~60 instructies) | werkt |
+| x87-FPU-subset (stack, aritmetiek, compare, 80-bit load/store) | werkt, met `double` i.p.v. 80-bit intern |
 | Eager flags incl. AF, OF, PF | werkt |
 | Herintreedbare `callGuest` | werkt |
 | Disassembler voor `--trace` | werkt (ruw maar bruikbaar) |
-| x87-FPU | **ontbreekt** |
+| 80-bit extended precision (echte x87-nauwkeurigheid) | **ontbreekt** (stack is `double`) |
 | AVX/AVX2 | **ontbreekt** (bewust; CPUID meldt ze niet) |
 | SEH / exception unwinding | **ontbreekt** |
 | Echte threads | **ontbreekt** |
@@ -128,9 +129,8 @@ volgorde van hoe groot de sprong is:
    direct nuttig zodra je een echte applicatie draait.
 2. **`BitBlt` en geheugen-DC's** — bijna elke Win32-app tekent gebufferd.
 3. **TLS-callbacks aanroepen** — een handvol regels, voorkomt rare bugs.
-4. **x87-FPU** — nodig voor oudere code.
-5. **Basale SEH** — begin met `__C_specific_handler` en `RtlUnwindEx`.
-6. **32-bit modus** — pas hieraan beginnen als 64-bit stabiel is.
+4. **Basale SEH** — begin met `__C_specific_handler` en `RtlUnwindEx`.
+5. **32-bit modus** — pas hieraan beginnen als 64-bit stabiel is.
 
 ## Meten
 

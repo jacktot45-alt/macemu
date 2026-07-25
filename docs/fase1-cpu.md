@@ -78,11 +78,31 @@ Die SSE2-set is geen luxe: de 64-bit MSVC-CRT doet `strlen`, `memset` en `memcmp
 met `pcmpeqb` + `pmovmskb`. Zonder die drie instructies kom je geen enkele echte
 Windows-executable door het opstarten heen.
 
+**x87** (`exec_x87.cpp`): de volledige 8-registerstack met FLD/FST/FSTP (m32/m64/m80),
+FILD/FIST/FISTP/FISTTP (m16/m32/m64), FADD/FSUB/FMUL/FDIV in al hun geheugen-,
+register- en pop-varianten, FCOM/FUCOM/FCOMI/FCOMIP, FCMOVcc, FCHS/FABS/FSQRT/FRNDINT,
+de transcendente functies (FSIN/FCOS/FPTAN/FPATAN/FYL2X/F2XM1/FSCALE), de constanten
+(FLD1/FLDZ/FLDPI/…), en het control/status word (FNINIT/FLDCW/FNSTCW/FNSTSW/FNCLEX).
+
+Ook dit is geen luxe: de MinGW-w64 CRT doet bij het opstarten een `FNINIT`, en op
+Windows/x86-64 is `long double` nog steeds 80-bit x87.
+
+**Eén eerlijke afwijking:** de registerstack is intern `double` (53 bits mantisse),
+niet de echte 80-bit extended precision (64 bits). Laden en opslaan van `m80fp`
+converteert correct heen en weer, dus het *formaat* klopt — maar tussenberekeningen
+kunnen in de laatste bits afwijken van een echte x87. Voor normale programma's is dat
+onzichtbaar; code die bewust op 80-bit precisie leunt zou het merken. Echte 80-bit
+vraagt software-emulatie van extended precision, en dat is een project op zich.
+
+De klassieke valkuil hier zijn de omgekeerde mnemonics in de `DC`/`DE`-groep:
+`DC E0+i` is `FSUBR ST(i),ST(0)` en `DC E8+i` is `FSUB ST(i),ST(0)` — precies andersom
+dan je bij `D8` zou verwachten. Daar staat een test op.
+
 ## Wat er bewust níét is
 
 | Ontbreekt | Gevolg | Moeilijkheid om toe te voegen |
 |---|---|---|
-| x87-FPU | oude 32-bit code met `long double` crasht | middelmatig: 80-bit floats + stackmodel |
+| Echte 80-bit x87-precisie | resultaten kunnen in de laatste bits afwijken | groot: software-emulatie van extended precision |
 | AVX/AVX2/AVX-512 | geen — CPUID meldt ze niet, dus de gast kiest SSE2 | groot |
 | SEH / exception unwinding | `RaiseException` en C++-`throw` zijn fataal | groot: `.pdata`, unwind-codes, filters |
 | Echte threads | `CreateThread` draait de functie synchroon uit | groot: scheduling + geheugenmodel |

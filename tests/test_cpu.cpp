@@ -419,6 +419,149 @@ void testSse() {
     CHECK(!m4.cpu.flags.cf);
 }
 
+void testX87() {
+    TEST("x87-subset");
+    // FNINIT: dit is de instructie waar de MinGW-CRT op opstart.
+    {
+        Machine m;
+        m.cpu.fpuTop = 3;
+        m.cpu.fpuControl = 0x1234;
+        m.load({0xDB, 0xE3, 0xF4}); // fninit; hlt
+        m.run();
+        CHECK_EQ(m.cpu.fpuTop, 0);
+        CHECK_EQ(m.cpu.fpuControl, 0x037Fu);
+    }
+
+    // FLD m64fp; FLD m64fp; FADDP -> optellen via de registerstack
+    {
+        Machine m;
+        double a = 1.5, b = 2.25;
+        uint64_t ab, bb;
+        std::memcpy(&ab, &a, 8);
+        std::memcpy(&bb, &b, 8);
+        m.mem.write64(kDataBase, ab);
+        m.mem.write64(kDataBase + 8, bb);
+        m.load({0x48, 0xB8, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax,0x10000
+                0xDD, 0x00,             // fld qword [rax]
+                0xDD, 0x40, 0x08,       // fld qword [rax+8]
+                0xDE, 0xC1,             // faddp st(1), st(0)
+                0xDD, 0x58, 0x10,       // fstp qword [rax+16]
+                0xF4});
+        m.run();
+        double r;
+        uint64_t rb = m.mem.read64(kDataBase + 16);
+        std::memcpy(&r, &rb, 8);
+        CHECK(r == 3.75);
+    }
+
+    // FSUB/FDIV met de omgekeerde DC-mnemonics (klassieke valkuil)
+    {
+        Machine m;
+        double a = 10.0, b = 4.0;
+        uint64_t ab, bb;
+        std::memcpy(&ab, &a, 8);
+        std::memcpy(&bb, &b, 8);
+        m.mem.write64(kDataBase, ab);
+        m.mem.write64(kDataBase + 8, bb);
+        m.load({0x48, 0xB8, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xDD, 0x00,             // fld qword [rax]      -> st0=10
+                0xDD, 0x40, 0x08,       // fld qword [rax+8]    -> st0=4, st1=10
+                0xDE, 0xE9,             // fsubp st(1), st(0)   -> st0 = 10 - 4
+                0xDD, 0x58, 0x10,       // fstp qword [rax+16]
+                0xF4});
+        m.run();
+        double r;
+        uint64_t rb = m.mem.read64(kDataBase + 16);
+        std::memcpy(&r, &rb, 8);
+        CHECK(r == 6.0);
+    }
+
+    // FILD / FISTP: integer <-> float
+    {
+        Machine m;
+        m.mem.write32(kDataBase, 42);
+        m.load({0x48, 0xB8, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xDB, 0x00,             // fild dword [rax]
+                0xDB, 0x58, 0x08,       // fistp dword [rax+8]
+                0xF4});
+        m.run();
+        CHECK_EQ(m.mem.read32(kDataBase + 8), 42u);
+    }
+
+    // FLDCW / FNSTCW
+    {
+        Machine m;
+        m.mem.write16(kDataBase, 0x0F7F);
+        m.load({0x48, 0xB8, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xD9, 0x28,             // fldcw word [rax]
+                0xD9, 0x78, 0x08,       // fnstcw word [rax+8]
+                0xF4});
+        m.run();
+        CHECK_EQ(m.cpu.fpuControl, 0x0F7Fu);
+        CHECK_EQ(m.mem.read16(kDataBase + 8), 0x0F7Fu);
+    }
+
+    // FCOMI zet de gewone EFLAGS, zodat je er direct op kunt springen
+    {
+        Machine m;
+        double a = 1.0, b = 2.0;
+        uint64_t ab, bb;
+        std::memcpy(&ab, &a, 8);
+        std::memcpy(&bb, &b, 8);
+        m.mem.write64(kDataBase, ab);
+        m.mem.write64(kDataBase + 8, bb);
+        m.load({0x48, 0xB8, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xDD, 0x40, 0x08,       // fld qword [rax+8]  -> st0 = 2.0
+                0xDD, 0x00,             // fld qword [rax]    -> st0 = 1.0, st1 = 2.0
+                0xDB, 0xF1,             // fcomi st(0), st(1) -> 1.0 < 2.0
+                0xF4});
+        m.run();
+        CHECK(m.cpu.flags.cf);   // kleiner dan
+        CHECK(!m.cpu.flags.zf);
+    }
+
+    // 80-bit load/store: het formaat moet heen en weer kloppen
+    {
+        Machine m;
+        double a = -1234.5;
+        uint64_t ab;
+        std::memcpy(&ab, &a, 8);
+        m.mem.write64(kDataBase, ab);
+        m.load({0x48, 0xB8, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xDD, 0x00,             // fld qword [rax]
+                0xDB, 0x78, 0x10,       // fstp tbyte [rax+16]   (80-bit)
+                0xDB, 0x68, 0x10,       // fld  tbyte [rax+16]
+                0xDD, 0x58, 0x20,       // fstp qword [rax+32]
+                0xF4});
+        m.run();
+        double r;
+        uint64_t rb = m.mem.read64(kDataBase + 32);
+        std::memcpy(&r, &rb, 8);
+        CHECK(r == -1234.5);
+    }
+
+    // FSQRT en FABS/FCHS
+    {
+        Machine m;
+        double a = 16.0;
+        uint64_t ab;
+        std::memcpy(&ab, &a, 8);
+        m.mem.write64(kDataBase, ab);
+        m.load({0x48, 0xB8, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xDD, 0x00,             // fld qword [rax]
+                0xD9, 0xFA,             // fsqrt   -> 4.0
+                0xD9, 0xE0,             // fchs    -> -4.0
+                0xD9, 0xE1,             // fabs    -> 4.0
+                0xDD, 0x58, 0x08,       // fstp qword [rax+8]
+                0xF4});
+        m.run();
+        double r;
+        uint64_t rb = m.mem.read64(kDataBase + 8);
+        std::memcpy(&r, &rb, 8);
+        CHECK(r == 4.0);
+    }
+}
+
 void testCallGuestAndHle() {
     TEST("callGuest (host roept gastcode aan)");
     Machine m;
@@ -461,6 +604,7 @@ int main() {
     testMemoryOperands();
     testStringOps();
     testSse();
+    testX87();
     testCallGuestAndHle();
     testUnsupportedInstructionIsClear();
     return testing::summary("test_cpu");

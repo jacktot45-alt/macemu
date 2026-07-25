@@ -121,7 +121,17 @@ public:
     uint64_t fsBase = 0;
     uint64_t gsBase = 0;
     uint32_t mxcsr = 0x1F80;
+
+    // --- x87 FPU ---
+    // Let op: de registerstack is `double` (64-bit), niet de echte 80-bit
+    // extended precision. Voor vrijwel alle code maakt dat niets uit, maar
+    // resultaten kunnen in de laatste bits afwijken van een echte x87.
+    // Zie docs/fase1-cpu.md.
+    double fpuStack[8] = {0};
+    int fpuTop = 0;                  // index in fpuStack van ST(0)
+    bool fpuTagValid[8] = {false};   // vereenvoudigde tag word: leeg of geldig
     uint16_t fpuControl = 0x037F;
+    uint16_t fpuStatus = 0;
 
     // --- emulator-toestand ---
     bool halted = false;
@@ -186,6 +196,17 @@ public:
 
     // Uitvoerders voor de SSE/SSE2-subset (exec_sse.cpp).
     bool executeSse(const Instr& in);
+    // Uitvoerder voor de x87-subset (exec_x87.cpp).
+    bool executeX87(const Instr& in);
+
+    // --- x87 helpers ---
+    double& st(int i) { return fpuStack[(fpuTop + i) & 7]; }
+    double stValue(int i) const { return fpuStack[(fpuTop + i) & 7]; }
+    void fpuPush(double v);
+    double fpuPop();
+    void fpuInit();
+    // Zet C3/C2/C0 in het status word volgens een x87-vergelijking.
+    void fpuSetCompareFlags(double a, double b);
 
 private:
     void executeTwoByte(const Instr& in);

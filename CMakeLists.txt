@@ -50,6 +50,7 @@ add_library(macemu_core STATIC
   src/cpu/decoder.cpp
   src/cpu/exec.cpp
   src/cpu/exec_sse.cpp
+  src/cpu/exec_x87.cpp
   src/cpu/disasm.cpp
   src/win32/win32.cpp
   src/win32/kernel32.cpp

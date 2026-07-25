@@ -932,8 +932,8 @@ void Cpu::execute(const Instr& in) {
         case 0x9B: return; // FWAIT
         case 0xD8: case 0xD9: case 0xDA: case 0xDB:
         case 0xDC: case 0xDD: case 0xDE: case 0xDF:
-            // x87 wordt (nog) niet geëmuleerd. De meeste x64-code gebruikt SSE.
-            throw UnsupportedInstruction(in, "x87 FPU-instructie (niet geïmplementeerd)");
+            if (executeX87(in)) return;
+            throw UnsupportedInstruction(in, "x87 FPU-instructie buiten de ondersteunde subset");
 
         default:
             break;
