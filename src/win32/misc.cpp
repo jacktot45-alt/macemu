@@ -238,6 +238,9 @@ void Win32::registerMisc() {
         if (idx > 2) idx = 2;
         return base + idx * 64;
     });
+    // setvbuf(stream, buffer, mode, size) - buffering stellen we niet echt in
+    // (elke "write" gaat toch direct naar de host), dus 0 (succes) is genoeg.
+    crt("setvbuf", [](Emulator&, Cpu&) -> uint64_t { return 0; });
 
     crt("exit", [](Emulator&, Cpu& cpu) -> uint64_t {
         cpu.exitCode = apiArg(cpu, 0) & 0xFFFFFFFF;
