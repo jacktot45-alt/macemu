@@ -132,6 +132,32 @@ void Win32::registerGdi32() {
         return 1;
     });
 
+    reg("Ellipse", [](Emulator& emu, Cpu& cpu) -> uint64_t {
+        DeviceContext* d = emu.win32().dc(apiArg(cpu, 0));
+        if (!d || !d->target) return 0;
+        int l = static_cast<int32_t>(apiArg(cpu, 1));
+        int t = static_cast<int32_t>(apiArg(cpu, 2));
+        int r = static_cast<int32_t>(apiArg(cpu, 3));
+        int b = static_cast<int32_t>(apiArg(cpu, 4));
+        double cx = (l + r) / 2.0, cy = (t + b) / 2.0;
+        double rx = (r - l) / 2.0, ry = (b - t) / 2.0;
+        if (rx < 1 || ry < 1) return 1;
+        GdiObject* brush = emu.win32().gdiObject(d->currentBrush);
+        GdiObject* pen = emu.win32().gdiObject(d->currentPen);
+        for (int y = t; y < b; ++y) {
+            for (int x = l; x < r; ++x) {
+                double dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+                double v = dx * dx + dy * dy;
+                if (v <= 1.0) {
+                    if (brush && brush->style != 1) d->target->setPixel(x, y, brush->color);
+                } else if (v <= 1.15 && pen && pen->style != 5) {
+                    d->target->setPixel(x, y, pen->color);
+                }
+            }
+        }
+        return 1;
+    });
+
     reg("MoveToEx", [](Emulator& emu, Cpu& cpu) -> uint64_t {
         DeviceContext* d = emu.win32().dc(apiArg(cpu, 0));
         if (!d) return 0;

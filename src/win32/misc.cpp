@@ -4,7 +4,9 @@
 // dynamisch tegenaan. Een handvol functies scheelt enorm veel geëmuleerde
 // instructies (en dus debugtijd).
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #include "macemu/emulator.h"
 #include "macemu/win32.h"
@@ -118,6 +120,23 @@ void Win32::registerMisc() {
     });
     crt("_msize", [](Emulator& emu, Cpu& cpu) -> uint64_t {
         return emu.win32().processHeap().sizeOf(apiArg(cpu, 0));
+    });
+
+    // rand()/srand() draaien gewoon op de host-C-library. Dat levert geen
+    // bit-exacte Windows-uitkomst op, maar voor "willekeurige mijnen plaatsen"
+    // maakt dat niets uit.
+    crt("srand", [](Emulator&, Cpu& cpu) -> uint64_t {
+        std::srand(static_cast<unsigned>(apiArg(cpu, 0)));
+        return 0;
+    });
+    crt("rand", [](Emulator&, Cpu&) -> uint64_t {
+        return static_cast<uint64_t>(std::rand());
+    });
+    crt("time", [](Emulator&, Cpu& cpu) -> uint64_t {
+        std::time_t t = std::time(nullptr);
+        uint64_t p = apiArg(cpu, 0);
+        if (p) cpu.mem.write64(p, static_cast<uint64_t>(t));
+        return static_cast<uint64_t>(t);
     });
 
     crt("memset", [](Emulator&, Cpu& cpu) -> uint64_t {
